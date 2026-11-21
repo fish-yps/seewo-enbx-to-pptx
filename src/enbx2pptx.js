@@ -147,7 +147,76 @@ function readSlide(file) {
     }
     out.elements.push(common);
   }
+  alignAnswerMarks(out.elements);
   return out;
+}
+
+// 希沃里老师会用一个浮动的红色单字母（A/B/C/D）标出正确答案，位置是相对题干摆的。
+// 转到 pptx 后按 px 精确复位会和题干文字重叠，这里把它对齐到题干里最近的括号上。
+const MARK_COLORS = new Set(['FF0000', 'C72727', 'FF0099', 'FF6600', 'E60012', 'FF3333']);
+function isAnswerMark(el) {
+  const t = plainText(el.text).replace(/[\s\u3000]/g, '');
+  if (t.length !== 1 || !/[A-Da-d✓√×]/.test(t)) return false;
+  if (el.w > 90 || el.h > 120) return false;
+  const color = el.text && el.text.lines && el.text.lines[0] && el.text.lines[0].runs[0] && el.text.lines[0].runs[0].color;
+  return !color || MARK_COLORS.has(color.hex) || color.hex.startsWith('FF');
+}
+function plainText(text) {
+  if (!text) return '';
+  if (text.hasLines === false) return text.plain || '';
+  return (text.lines || []).map((l) => l.runs.map((r) => r.text).join('')).join('');
+}
+// 粗略字宽（px）：中文=1em，ASCII≈0.55em
+function roughWidth(str, size) {
+  let w = 0;
+  for (const ch of String(str)) w += ch.charCodeAt(0) < 128 ? size * 0.55 : size;
+  return w;
+}
+function alignAnswerMarks(elements) {
+  const marks = elements.filter((e) => e.tag === 'Text' && isAnswerMark(e));
+  if (!marks.length) return;
+  const owners = elements.filter((e) => e.tag === 'Text' && !isAnswerMark(e) && plainText(e.text).length > 8);
+  for (const mark of marks) {
+    const ch = plainText(mark.text).trim().slice(0, 1);
+    // 找一行里出现「（...）」且字号接近的题干文本
+    let best = null;
+    for (const owner of owners) {
+      for (const line of owner.text.lines || []) {
+        const text = line.runs.map((r) => r.text).join('').replace(/\r\n?/g, '');
+        const size = Math.max(...line.runs.map((r) => r.size), 0);
+        if (!size) continue;
+        const positions = [];
+        const re = /[（(][\s\u3000_.]{1,6}[）)]/g;
+        let m;
+        while ((m = re.exec(text))) positions.push({ idx: m.index, len: m[0].length });
+        if (!positions.length) continue;
+        // 优先与"已有字母填入"的括号对齐，其次按现有 x 选最近
+        let pick = positions.find((p) => text[p.idx + p.len - 1] === '）' && /[A-Da-d]/.test(text.slice(p.idx + 1, p.idx + 1 + 2)));
+        if (!pick) {
+          const curX = mark.x;
+          let bestD = Infinity;
+          for (const p of positions) {
+            const x = owner.x + 2 + roughWidth(text.slice(0, p.idx), size) + size * 0.25;
+            const d = Math.abs(x - curX);
+            if (d < bestD) { bestD = d; pick = p; }
+          }
+        }
+        if (!pick) continue;
+        const targetX = owner.x + 2 + roughWidth(text.slice(0, pick.idx), size) + size * 0.2;
+        const targetY = owner.y + (owner.text.lines.indexOf(line)) * size * 1.2;
+        best = { x: targetX, y: owner.y, size };
+        break;
+      }
+      if (best) break;
+    }
+    if (!best) continue;
+    // 字母框本身大小由字号决定，保持原字号但把位置对准括号
+    const curSize = mark.text.lines[0] && Math.max(...mark.text.lines[0].runs.map((r) => r.size), 0) || best.size;
+    mark.x = best.x;
+    mark.y = best.y + (best.size - curSize) * 0.15;
+    mark.h = Math.max(mark.h, curSize * 1.25);
+    mark.w = Math.max(mark.w, curSize);
+  }
 }
 
 // RichText -> { lines:[{align, spacing, runs:[...]}], hasLines:bool, plain:string }
@@ -229,7 +298,7 @@ function pPrXml(line, inBox) {
   const lvl = Math.min(line.indentLevel, 8);
   const marL = Math.round(line.marginLeft * PX);
   const indent = Math.round((line.indent || 0) * PX * -1);
-  let pr = `<a:pPr marL="${marL}" indent="${indent}" lvl="${lvl}" algn="${algn(line.align)}">`;
+  let pr = `<a:pPr marL="${marL}" indent="${indent}" lvl="${lvl}" algn="${algn(line.align)}" hangingPunct="1">`;
   pr += `<a:spcBef><a:spcPts val="${Math.round(line.spaceBefore * 100)}"/></a:spcBef>`;
   pr += `<a:spcAft><a:spcPts val="${Math.round(line.spaceAfter * 100)}"/></a:spcAft>`;
   if (line.spacing && Math.abs(line.spacing - 1) > 0.01) pr += `<a:lnSpc><a:spcPct val="${Math.round(line.spacing * 100000)}"/></a:lnSpc>`;
@@ -274,10 +343,32 @@ function textBodyXml(richText, boxEl, shapeRun) {
   }
   if (!ps.length) ps.push('<a:p><a:endParaRPr lang="zh-CN"/></a:p>');
   return (
-    `<p:txBody><a:bodyPr wrap="square" lIns="45720" tIns="45720" rIns="45720" bIns="45720" anchor="t"><a:noAutofit/></a:bodyPr><a:lstStyle/>` +
+    `<p:txBody><a:bodyPr wrap="square" lIns="45720" tIns="45720" rIns="45720" bIns="45720" anchor="t"><a:normAutofit/></a:bodyPr><a:lstStyle/>` +
     ps.join('') +
     '</p:txBody>'
   );
+}
+
+// 估算一个文本块在给定宽度下需要的行高（用平均字宽粗估，只用于兜底判断）
+function estimateHeight(richText, width, lineScale) {
+  if (!richText || !richText.hasLines) return 0;
+  let total = 0;
+  for (const line of richText.lines) {
+    let maxSize = 0;
+    let wide = 0;
+    for (const r of line.runs) {
+      maxSize = Math.max(maxSize, r.size || 0);
+      const t = String(r.text || '').replace(/\r\n?/g, '\n');
+      for (const ch of t) {
+        if (ch === '\n') continue;
+        wide += ch.charCodeAt(0) < 128 ? (r.size || 0) * 0.55 : r.size || 0;
+      }
+    }
+    if (!maxSize) continue;
+    const lines = Math.max(1, Math.ceil(wide / Math.max(40, width - 8)));
+    total += lines * maxSize * 1.2 + (line.spaceBefore + line.spaceAfter) * (lineScale || 1);
+  }
+  return total;
 }
 
 function xfrm(el, w, h) {
@@ -367,6 +458,13 @@ async function main(opts) {
     for (const el of data.elements) {
       if (el.tag === 'Text') {
         if (!el.text) continue;
+        // 源课件里偶尔有"一段字塞进小框"的页面（作者误操作）；框高按需放大，
+        // 再交给 normAutofit 缩字，避免整块文字冲出幻灯片
+        const need = estimateHeight(el.text, el.w);
+        // 两种情况要兜底：框本身超过页高，或文字明显超出框
+        const maxH = Math.max(60, SLIDE_H - Math.max(0, el.y) - 8);
+        if (el.h > maxH) el.h = maxH;
+        if (need > el.h * 1.15) el.h = Math.min(need, maxH);
         body +=
           `<p:sp><p:nvSpPr><p:cNvPr id="${nid()}" name="TextBox ${nid()}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>` +
           `<p:spPr>${xfrm(el, el.w, el.h)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr>` +
