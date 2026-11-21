@@ -1,0 +1,32 @@
+{
+  "name": "seewo-enbx-to-pptx",
+  "version": "1.0.0",
+  "description": "把希沃白板（EasiNote/EN5）分享链接的课件下载并转成 PowerPoint .pptx",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "convert": "node src/enbx2pptx.js",
+    "fetch": "node scripts/fetch.js",
+    "verify": "node scripts/verify.js",
+    "render": "node scripts/render.js",
+    "test": "node test/smoke.js"
+  },
+  "keywords": [],
+  "author": "fish-yps",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "@xmldom/xmldom": "^0.9.12",
+    "jszip": "^3.10.2"
+  },
+  "devDependencies": {
+    "canvas": "^3.2.3",
+    "undici": "^8.13.1"
+  },
+  "bin": {
+    "seewo-enbx-to-pptx": "src/enbx2pptx.js",
+    "seewo-fetch": "scripts/fetch.js"
+  }
+}
