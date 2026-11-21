@@ -85,7 +85,8 @@ execFileSync(process.execPath, [path.join(root, 'src/enbx2pptx.js'), tmp, out, '
   const raw1 = await z.file('ppt/slides/slide1.xml').async('string');
   const s1 = raw1.replace(/>\n</g, '><');
   assert(s1.includes('第一页标题'), '第一页应包含标题文字');
-  assert(s1.includes('sz="4800"'), '字号 48pt 应写成 4800');
+  // 希沃 FontSize=48px，按 pt = px*18/26 换算 => 33.23pt => sz=3323
+  assert(s1.includes('sz="3323"'), '48px 应换算成 33.23pt (sz=3323)，实际输出不含该值');
   assert(s1.includes('FF0000'), '红色文字颜色应保留');
   assert(s1.includes('<a:solidFill><a:srgbClr val="FFFFFF"/>'), '白色背景应保留');
 

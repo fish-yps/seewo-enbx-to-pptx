@@ -61,7 +61,7 @@ function col(el) { const c = el.getElementsByTagName('a:srgbClr')[0]; if (!c) re
         // 每个 run 单独测量宽度绘制（避免启发式字宽把文字推出框外）
         const rInfo = runs.map((r) => {
           const rp = r.getElementsByTagName('a:rPr')[0];
-          const sz = +rp.getAttribute('sz') / 100;
+          const sz = (+rp.getAttribute('sz') / 100) * (96 / 72);
           const fam = (rp.getElementsByTagName('a:ea')[0]?.getAttribute('typeface')) || '';
           const latin = (rp.getElementsByTagName('a:latin')[0]?.getAttribute('typeface')) || '';
           const cc = col(rp.getElementsByTagName('a:solidFill')[0]) || { hex: '#000000', a: 1 };

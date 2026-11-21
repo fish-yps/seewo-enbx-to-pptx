@@ -60,6 +60,7 @@ node scripts/render.js 课件.pptx ./png    # 逐页渲染成 PNG 方便目检�
 | 希沃元素 | PPTX 对应 |
 | --- | --- |
 | 画布 1280×720 | 13.333in×7.5in（16:9），1px = 9525 EMU |
+| `<FontSize>40`（px） | 字号按 `pt = px × 18/26` 换算：40px → 27.69pt（希沃的「28号」）；直接当 pt 会大出 44% |
 | `<Background><ImageBrush>` | 页面背景图片（Stretch=Fill 时按填充裁切） |
 | `<Text>` + `<RichText>` | 文本框；`<TextLine>` 逐行转段落，`<TextRun>` 逐段保留字号/加粗/斜体/颜色/字体/底色 |
 | `<Picture>` + `<DisplayRegion>` | 图片，按 `Rectangle` 换算成 `srcRect` 裁剪 |
@@ -74,6 +75,7 @@ node scripts/render.js 课件.pptx ./png    # 逐页渲染成 PNG 方便目检�
 - 纯文字、图片、基础形状的课件可以完整还原。
 - 希沃的**动画、触发交互、课堂活动（选择题/分类等）、思维导图、音视频**不会转换，只会保留静态的第一帧内容。
 - 字体依赖本机安装（宋体、微软雅黑、楷体等）；没有对应字体时会回退。
+- 一个 `<TextLine>` 是一整段文字（希沃不预折行），长段落交给 PowerPoint 自动换行。
 - 部分元素在希沃里靠看不见的空 `TextRun` 撑开间距，转成 pptx 后行距可能与原版略有出入。
 - 本项目只处理**公开分享链接**，不涉及登录账号或私有课件。
 

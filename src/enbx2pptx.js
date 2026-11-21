@@ -60,6 +60,15 @@ function parseFile(file) {
   return doc.documentElement;
 }
 
+// ---------------- 字号 ----------------
+// 希沃的 <FontSize> 是画布像素(px)，PowerPoint 的 sz 是磅(pt)。
+// 希沃字号表：12号=17.33px、16号=22.67px、28号=40px、40号=58.67px，即 pt = px * 18 / 26。
+const PX_TO_PT = 18 / 26;
+function toPt(px) {
+  const pt = px * PX_TO_PT;
+  return Math.max(100, Math.min(400000, Math.round(pt * 100)));
+}
+
 // ---------------- 颜色 ----------------
 function parseColor(s) {
   if (!s) return null;
@@ -191,7 +200,7 @@ function normFamily(f) {
 }
 
 function runPr(r) {
-  const attrs = [`sz="${Math.round(r.size * 100)}"`, r.bold ? 'b="1"' : '', r.italic ? 'i="1"' : '', r.underline ? 'u="sng"' : '']
+  const attrs = [`sz="${toPt(r.size)}"`, r.bold ? 'b="1"' : '', r.italic ? 'i="1"' : '', r.underline ? 'u="sng"' : '']
     .filter(Boolean)
     .join(' ');
   let x = `<a:rPr lang="zh-CN" altLang="en-US" ${attrs} dirty="0">`;
@@ -232,6 +241,8 @@ function pPrXml(line, inBox) {
 }
 
 // 一行里的 runs -> 段落数组（按 \n 切分，保留样式）
+// 一个 <TextLine> 是"一段文字"：文字过长时希沃不会预先折行，而是靠文本框自动换行。
+// 所以这里只把显式换行拆成多次 <a:p>，长段落交给 PowerPoint 自己排版。
 function paragraphsFromLine(line) {
   const ps = [];
   let cur = '';
